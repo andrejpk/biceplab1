@@ -1,0 +1,235 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.3.255.40792",
+      "templateHash": "13449525666547239897"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string"
+    },
+    "resourcePrefix": {
+      "type": "string"
+    }
+  },
+  "functions": [],
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2021-01-01",
+      "name": "rg_main",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2019-10-01",
+      "name": "ingestStorage",
+      "resourceGroup": "rg_main",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourcePrefix": {
+            "value": "[parameters('resourcePrefix')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.3.255.40792",
+              "templateHash": "7220828046291206332"
+            }
+          },
+          "parameters": {
+            "resourcePrefix": {
+              "type": "string",
+              "maxLength": 11,
+              "minLength": 3
+            },
+            "location": {
+              "type": "string"
+            }
+          },
+          "functions": [],
+          "resources": [
+            {
+              "copy": {
+                "name": "storage",
+                "count": "[length(range(0, 3))]"
+              },
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2021-02-01",
+              "name": "[format('{0}ingeststorage{1}', parameters('resourcePrefix'), range(0, 3)[copyIndex()])]",
+              "kind": "BlobStorage",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Premium_LRS"
+              }
+            }
+          ],
+          "outputs": {
+            "urls": {
+              "type": "array",
+              "copy": {
+                "count": "[length(range(0, 3))]",
+                "input": "[reference(resourceId('Microsoft.Storage/storageAccounts', format('{0}ingeststorage{1}', parameters('resourcePrefix'), range(0, 3)[range(0, 3)[copyIndex()]]))).primaryEndpoints.blob]"
+              }
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', 'rg_main')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2019-10-01",
+      "name": "ingestFn",
+      "resourceGroup": "rg_main",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "resourcePrefix": {
+            "value": "[parameters('resourcePrefix')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.3.255.40792",
+              "templateHash": "14336447759727629222"
+            }
+          },
+          "parameters": {
+            "resourcePrefix": {
+              "type": "string"
+            }
+          },
+          "functions": [],
+          "variables": {
+            "location": "[resourceGroup().location]",
+            "extendedPrefix": "[format('{0}{1}', parameters('resourcePrefix'), uniqueString(resourceGroup().id))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2020-12-01",
+              "name": "[format('{0}fn', variables('extendedPrefix'))]",
+              "location": "[variables('location')]",
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('{0}webapp', variables('extendedPrefix')))]",
+                "siteConfig": {
+                  "appSettings": [
+                    {
+                      "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'ai'), '2019-10-01').outputs.ikey.value]"
+                    },
+                    {
+                      "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                      "value": "[format('$InstrumentationKey={0}', reference(resourceId('Microsoft.Resources/deployments', 'ai'), '2019-10-01').outputs.ikey.value)]"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'ai')]",
+                "[resourceId('Microsoft.Web/serverfarms', format('{0}webapp', variables('extendedPrefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2020-12-01",
+              "name": "[format('{0}webapp', variables('extendedPrefix'))]",
+              "location": "[variables('location')]"
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2019-10-01",
+              "name": "ai",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "extendedPrefix": {
+                    "value": "[variables('extendedPrefix')]"
+                  },
+                  "location": {
+                    "value": "[variables('location')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.3.255.40792",
+                      "templateHash": "9808831211616590740"
+                    }
+                  },
+                  "parameters": {
+                    "extendedPrefix": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    }
+                  },
+                  "functions": [],
+                  "resources": [
+                    {
+                      "type": "Microsoft.Insights/components",
+                      "apiVersion": "2020-02-02-preview",
+                      "name": "[format('{0}ai', parameters('extendedPrefix'))]",
+                      "location": "[parameters('location')]",
+                      "kind": "web",
+                      "properties": {
+                        "Application_Type": "web",
+                        "publicNetworkAccessForIngestion": "Enabled",
+                        "publicNetworkAccessForQuery": "Enabled"
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "ai": {
+                      "type": "object",
+                      "value": "[reference(resourceId('Microsoft.Insights/components', format('{0}ai', parameters('extendedPrefix'))), '2020-02-02-preview', 'full')]"
+                    },
+                    "ikey": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Insights/components', format('{0}ai', parameters('extendedPrefix')))).InstrumentationKey]"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', 'rg_main')]"
+      ]
+    }
+  ]
+}
